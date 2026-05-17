@@ -36,6 +36,8 @@ The goal is to build awareness and help users make smarter consumption decisions
   * Name
   * Category
   * Nutrition information
+<img width="235" height="523" alt="image" src="https://github.com/user-attachments/assets/9c656df6-16b6-4d31-b120-ccaf5342a386" />
+
 
 ---
 
