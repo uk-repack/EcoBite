@@ -36,7 +36,13 @@ The goal is to build awareness and help users make smarter consumption decisions
   * Name
   * Category
   * Nutrition information
-![alt text](image-1.png)
+<img width="235" height="523" alt="image" src="https://github.com/user-attachments/assets/62e96719-6b06-4c07-8c6d-bb8e2a14e924" />
+
+<img width="235" height="523" alt="image" src="https://github.com/user-attachments/assets/e3051329-85fa-49b5-beb4-6376f1b75c76" />
+
+<img width="234" height="521" alt="image" src="https://github.com/user-attachments/assets/94041a03-5d0b-4990-b12c-b13c2bf465f5" />
+
+
 
 
 ---
@@ -58,6 +64,7 @@ The goal is to build awareness and help users make smarter consumption decisions
   * Bought too much
   * Went bad
   * Didn’t like it
+<img width="233" height="518" alt="image" src="https://github.com/user-attachments/assets/66d370ec-0e97-45f1-998e-84fa9881b8be" />
 
 ---
 
@@ -78,6 +85,7 @@ Track:
 * Weekly food waste cost
 * Monthly food waste cost
 * Overall savings insights
+<img width="235" height="523" alt="image" src="https://github.com/user-attachments/assets/be6a5533-b7e2-4545-b40a-bdb29b5aa432" />
 
 ---
 
@@ -89,6 +97,7 @@ Visual insights including:
 * Category-wise breakdown
 * Weekly & monthly charts
 * Personal behavior patterns
+<img width="236" height="520" alt="image" src="https://github.com/user-attachments/assets/e23de12c-e5e6-4336-9a12-f1f28abeaba3" />
 
 ---
 
