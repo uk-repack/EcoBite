@@ -14,6 +14,8 @@ import javax.inject.Singleton
 
 import com.example.ecobite.data.remote.FoodFactsRepository
 import com.example.ecobite.data.remote.OpenFoodFactsApi
+import com.example.ecobite.data.remote.gemini.GeminiApi
+import com.example.ecobite.data.remote.gemini.GeminiRepository
 
 import androidx.work.WorkManager
 import com.example.ecobite.worker.NotificationScheduler
@@ -64,6 +66,26 @@ object AppModule {
         api: OpenFoodFactsApi
     ): FoodFactsRepository {
         return FoodFactsRepository(api)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGeminiApi(): GeminiApi {
+        return retrofit2.Retrofit.Builder()
+            .baseUrl("https://generativelanguage.googleapis.com/")
+            .addConverterFactory(
+                retrofit2.converter.gson.GsonConverterFactory.create()
+            )
+            .build()
+            .create(GeminiApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGeminiRepository(
+        api: GeminiApi
+    ): GeminiRepository {
+        return GeminiRepository(api)
     }
 
     @Provides

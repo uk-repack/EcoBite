@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -17,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ecobite.data.local.entities.PantryItem
+import com.example.ecobite.data.remote.gemini.SmartPantrySuggestion
+import com.example.ecobite.data.remote.gemini.SmartRecipeSuggestion
 import com.example.ecobite.ui.navigation.EcoBiteTopBar
 import java.text.SimpleDateFormat
 import java.util.*
@@ -29,6 +32,8 @@ fun PantryScreen(
     onAddItem: () -> Unit
 ) {
     val pantryItems by viewModel.allPantryItems.collectAsState()
+    val smartPantryState by viewModel.smartPantryState.collectAsState()
+    val smartRecipeState by viewModel.smartRecipeState.collectAsState()
     val uiMessage   by viewModel.uiMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -91,6 +96,20 @@ fun PantryScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
+                item {
+                    SmartPantryCard(
+                        isLoading = smartPantryState.isLoading,
+                        suggestion = smartPantryState.suggestion,
+                        onGenerate = viewModel::generateSmartPantrySuggestions
+                    )
+                }
+                item {
+                    SmartRecipeCard(
+                        isLoading = smartRecipeState.isLoading,
+                        recipe = smartRecipeState.recipe,
+                        onGenerate = viewModel::generateSmartRecipe
+                    )
+                }
                 items(
                     items = pantryItems,
                     key = { it.id }
@@ -101,6 +120,248 @@ fun PantryScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SmartRecipeCard(
+    isLoading: Boolean,
+    recipe: SmartRecipeSuggestion?,
+    onGenerate: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Smart Recipe",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Cook with what you already have",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Button(
+                    onClick = onGenerate,
+                    enabled = !isLoading,
+                    contentPadding = PaddingValues(horizontal = 12.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Recipe")
+                    }
+                }
+            }
+
+            recipe?.let {
+                SmartRecipeContent(recipe = it)
+            }
+        }
+    }
+}
+
+@Composable
+fun SmartRecipeContent(
+    recipe: SmartRecipeSuggestion
+) {
+    val hasStructuredContent = recipe.usesUp.isNotEmpty() ||
+            recipe.pantryIngredients.isNotEmpty() ||
+            recipe.basicExtras.isNotEmpty() ||
+            recipe.steps.isNotEmpty()
+
+    if (!hasStructuredContent) {
+        Text(
+            text = recipe.rawText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = recipe.recipeName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        SmartRecipeSection("Uses Up", recipe.usesUp)
+        SmartRecipeSection("Pantry Ingredients", recipe.pantryIngredients)
+        SmartRecipeSection("Basic Extras", recipe.basicExtras)
+        SmartRecipeSection("Steps", recipe.steps)
+    }
+}
+
+@Composable
+fun SmartRecipeSection(
+    title: String,
+    items: List<String>
+) {
+    if (items.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        items.forEachIndexed { index, item ->
+            val prefix = if (title == "Steps") "${index + 1}. " else "- "
+            Text(
+                text = "$prefix$item",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun SmartPantryCard(
+    isLoading: Boolean,
+    suggestion: SmartPantrySuggestion?,
+    onGenerate: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Smart Pantry",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "Get ideas from what expires soon",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Button(
+                    onClick = onGenerate,
+                    enabled = !isLoading,
+                    contentPadding = PaddingValues(horizontal = 12.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text("Ask")
+                    }
+                }
+            }
+
+            suggestion?.let {
+                SmartPantrySuggestionContent(suggestion = it)
+            }
+        }
+    }
+}
+
+@Composable
+fun SmartPantrySuggestionContent(
+    suggestion: SmartPantrySuggestion
+) {
+    val hasStructuredContent = suggestion.useFirst.isNotEmpty() ||
+            suggestion.recipeIdeas.isNotEmpty() ||
+            suggestion.wasteSaverTip.isNotEmpty()
+
+    if (!hasStructuredContent) {
+        Text(
+            text = suggestion.rawText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        return
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SmartPantrySection(
+            title = "Use First",
+            items = suggestion.useFirst
+        )
+        SmartPantrySection(
+            title = "Recipe Ideas",
+            items = suggestion.recipeIdeas
+        )
+        SmartPantrySection(
+            title = "Waste Saver Tip",
+            items = suggestion.wasteSaverTip
+        )
+    }
+}
+
+@Composable
+fun SmartPantrySection(
+    title: String,
+    items: List<String>
+) {
+    if (items.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        items.forEach { item ->
+            Text(
+                text = "- $item",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
         }
     }
 }

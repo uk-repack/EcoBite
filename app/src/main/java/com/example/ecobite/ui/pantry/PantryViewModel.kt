@@ -6,6 +6,15 @@ import com.example.ecobite.data.local.entities.PantryItem
 import com.example.ecobite.data.local.entities.WasteLog
 import com.example.ecobite.data.remote.FoodFactsRepository
 import com.example.ecobite.data.remote.FoodResult
+import com.example.ecobite.data.remote.gemini.GeminiRepository
+import com.example.ecobite.data.remote.gemini.GeminiResult
+import com.example.ecobite.data.remote.gemini.SmartFillResult
+import com.example.ecobite.data.remote.gemini.SmartFillSuggestion
+import com.example.ecobite.data.remote.gemini.SmartPantrySuggestion
+import com.example.ecobite.data.remote.gemini.SmartRecipeResult
+import com.example.ecobite.data.remote.gemini.SmartRecipeSuggestion
+import com.example.ecobite.data.remote.gemini.SmartWasteReasonResult
+import com.example.ecobite.data.remote.gemini.SmartWasteReasonSuggestion
 import com.example.ecobite.data.repository.PantryRepository
 import com.example.ecobite.domain.calculator.Co2Calculator
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +33,7 @@ import com.example.ecobite.worker.NotificationScheduler
 class PantryViewModel @Inject constructor(
     private val repository: PantryRepository,
     private val foodFactsRepository: FoodFactsRepository,
+    private val geminiRepository: GeminiRepository,
     private val notificationScheduler: NotificationScheduler
 ) : ViewModel() {
 
@@ -98,6 +108,25 @@ class PantryViewModel @Inject constructor(
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
+    // ── Smart Pantry state ────────────────────────────────────────────────
+
+    private val _smartPantryState = MutableStateFlow(SmartPantryUiState())
+    val smartPantryState: StateFlow<SmartPantryUiState> =
+        _smartPantryState.asStateFlow()
+
+    private val _smartFillState = MutableStateFlow(SmartFillUiState())
+    val smartFillState: StateFlow<SmartFillUiState> =
+        _smartFillState.asStateFlow()
+
+    private val _smartWasteReasonState =
+        MutableStateFlow(SmartWasteReasonUiState())
+    val smartWasteReasonState: StateFlow<SmartWasteReasonUiState> =
+        _smartWasteReasonState.asStateFlow()
+
+    private val _smartRecipeState = MutableStateFlow(SmartRecipeUiState())
+    val smartRecipeState: StateFlow<SmartRecipeUiState> =
+        _smartRecipeState.asStateFlow()
+
     // ── Pantry actions ────────────────────────────────────────────────────
 
     fun addItem(item: PantryItem) {
@@ -158,7 +187,117 @@ class PantryViewModel @Inject constructor(
         _scanResult.value = null
     }
 
+    // ── Smart Pantry actions ──────────────────────────────────────────────
+
+    fun generateSmartPantrySuggestions() {
+        viewModelScope.launch {
+            _smartPantryState.value = SmartPantryUiState(isLoading = true)
+            when (
+                val result = geminiRepository.generatePantrySuggestions(
+                    allPantryItems.value
+                )
+            ) {
+                is GeminiResult.Success -> {
+                    _smartPantryState.value = SmartPantryUiState(
+                        suggestion = result.suggestion
+                    )
+                }
+                is GeminiResult.Error -> {
+                    _smartPantryState.value = SmartPantryUiState(
+                        errorMessage = result.message
+                    )
+                    _uiMessage.value = result.message
+                }
+            }
+        }
+    }
+
+    fun generateSmartRecipe() {
+        viewModelScope.launch {
+            _smartRecipeState.value = SmartRecipeUiState(isLoading = true)
+            when (
+                val result = geminiRepository.generateSmartRecipe(
+                    allPantryItems.value
+                )
+            ) {
+                is SmartRecipeResult.Success -> {
+                    _smartRecipeState.value = SmartRecipeUiState(
+                        recipe = result.recipe
+                    )
+                }
+                is SmartRecipeResult.Error -> {
+                    _smartRecipeState.value = SmartRecipeUiState(
+                        errorMessage = result.message
+                    )
+                    _uiMessage.value = result.message
+                }
+            }
+        }
+    }
+
+    fun generateSmartFill(itemName: String) {
+        viewModelScope.launch {
+            _smartFillState.value = SmartFillUiState(isLoading = true)
+            when (val result = geminiRepository.generateSmartFill(itemName)) {
+                is SmartFillResult.Success -> {
+                    _smartFillState.value = SmartFillUiState(
+                        suggestion = result.suggestion
+                    )
+                    _uiMessage.value = "Smart Fill applied"
+                }
+                is SmartFillResult.Error -> {
+                    _smartFillState.value = SmartFillUiState(
+                        errorMessage = result.message
+                    )
+                    _uiMessage.value = result.message
+                }
+            }
+        }
+    }
+
+    fun clearSmartFillSuggestion() {
+        _smartFillState.value = _smartFillState.value.copy(suggestion = null)
+    }
+
     // ── Waste log actions ─────────────────────────────────────────────────
+
+    fun generateSmartWasteReason(
+        pantryItem: PantryItem?,
+        quantityWasted: String
+    ) {
+        if (pantryItem == null) {
+            _uiMessage.value = "Select a pantry item before using Smart Reason."
+            return
+        }
+
+        viewModelScope.launch {
+            _smartWasteReasonState.value = SmartWasteReasonUiState(isLoading = true)
+            when (
+                val result = geminiRepository.generateSmartWasteReason(
+                    item = pantryItem,
+                    quantityWasted = quantityWasted.toFloatOrNull()
+                )
+            ) {
+                is SmartWasteReasonResult.Success -> {
+                    _smartWasteReasonState.value = SmartWasteReasonUiState(
+                        suggestion = result.suggestion
+                    )
+                    _uiMessage.value = "Smart Reason applied"
+                }
+                is SmartWasteReasonResult.Error -> {
+                    _smartWasteReasonState.value = SmartWasteReasonUiState(
+                        errorMessage = result.message
+                    )
+                    _uiMessage.value = result.message
+                }
+            }
+        }
+    }
+
+    fun clearSmartWasteReasonSuggestion() {
+        _smartWasteReasonState.value =
+            _smartWasteReasonState.value.copy(suggestion = null)
+    }
 
     fun logWaste(
         pantryItem: PantryItem,
@@ -210,4 +349,28 @@ data class ScannedFood(
     val carbs: Float,
     val fat: Float,
     val barcode: String
+)
+
+data class SmartPantryUiState(
+    val isLoading: Boolean = false,
+    val suggestion: SmartPantrySuggestion? = null,
+    val errorMessage: String? = null
+)
+
+data class SmartFillUiState(
+    val isLoading: Boolean = false,
+    val suggestion: SmartFillSuggestion? = null,
+    val errorMessage: String? = null
+)
+
+data class SmartWasteReasonUiState(
+    val isLoading: Boolean = false,
+    val suggestion: SmartWasteReasonSuggestion? = null,
+    val errorMessage: String? = null
+)
+
+data class SmartRecipeUiState(
+    val isLoading: Boolean = false,
+    val recipe: SmartRecipeSuggestion? = null,
+    val errorMessage: String? = null
 )

@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,6 +28,7 @@ fun AddItemScreen(
 ) {
     val scanResult by viewModel.scanResult.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
+    val smartFillState by viewModel.smartFillState.collectAsState()
     val uiMessage  by viewModel.uiMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -37,6 +39,7 @@ fun AddItemScreen(
     var category   by remember { mutableStateOf("vegetable") }
     var price      by remember { mutableStateOf("") }
     var expiryDays by remember { mutableStateOf("") }
+    var storageTip by remember { mutableStateOf("") }
     var showError  by remember { mutableStateOf(false) }
 
     val units = listOf("units", "kg", "g", "litres")
@@ -52,6 +55,15 @@ fun AddItemScreen(
             name     = food.name
             category = food.category
             viewModel.clearScanResult()
+        }
+    }
+
+    LaunchedEffect(smartFillState.suggestion) {
+        smartFillState.suggestion?.let { suggestion ->
+            category = suggestion.category
+            expiryDays = suggestion.expiryDays.toString()
+            storageTip = suggestion.storageTip
+            viewModel.clearSmartFillSuggestion()
         }
     }
 
@@ -158,6 +170,58 @@ fun AddItemScreen(
                         Text("Name is required")
                 }
             )
+
+            Button(
+                onClick = { viewModel.generateSmartFill(name) },
+                enabled = name.isNotBlank() && !smartFillState.isLoading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                if (smartFillState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Smart filling...")
+                } else {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Smart Fill")
+                }
+            }
+
+            if (storageTip.isNotBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Storage Tip",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = storageTip,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
 
             // ── Quantity + Unit ───────────────────────────────────────────
             Row(

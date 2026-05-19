@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,10 +27,13 @@ fun WasteLogScreen(
     val pantryItems    by viewModel.allPantryItems.collectAsState()
     val snackbarState  = remember { SnackbarHostState() }
     val uiMessage      by viewModel.uiMessage.collectAsState()
+    val smartWasteReasonState by viewModel.smartWasteReasonState.collectAsState()
 
     var selectedItem   by remember { mutableStateOf<PantryItem?>(null) }
     var quantity       by remember { mutableStateOf("") }
+    var useAllQuantity by remember { mutableStateOf(false) }
     var selectedReason by remember { mutableStateOf("") }
+    var preventionTip  by remember { mutableStateOf("") }
     var showError      by remember { mutableStateOf(false) }
 
     // Preview of CO2 + cost impact
@@ -56,6 +60,20 @@ fun WasteLogScreen(
         uiMessage?.let {
             snackbarState.showSnackbar(it)
             viewModel.clearMessage()
+        }
+    }
+
+    LaunchedEffect(smartWasteReasonState.suggestion) {
+        smartWasteReasonState.suggestion?.let { suggestion ->
+            selectedReason = suggestion.reasonKey
+            preventionTip = suggestion.preventionTip
+            viewModel.clearSmartWasteReasonSuggestion()
+        }
+    }
+
+    LaunchedEffect(selectedItem, useAllQuantity) {
+        if (useAllQuantity) {
+            quantity = selectedItem?.quantity?.toString().orEmpty()
         }
     }
 
@@ -134,6 +152,9 @@ fun WasteLogScreen(
                                 },
                                 onClick = {
                                     selectedItem = item
+                                    if (useAllQuantity) {
+                                        quantity = item.quantity.toString()
+                                    }
                                     expanded = false
                                 }
                             )
@@ -148,23 +169,44 @@ fun WasteLogScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-            OutlinedTextField(
-                value = quantity,
-                onValueChange = { quantity = it },
-                label = {
-                    Text("Quantity (${selectedItem?.unit ?: "units"})")
-                },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = androidx.compose.foundation.text
-                    .KeyboardOptions(
-                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
-                    ),
-                isError = showError && quantity.isBlank(),
-                supportingText = {
-                    if (showError && quantity.isBlank())
-                        Text("Quantity is required")
-                }
-            )
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = {
+                        quantity = it
+                        useAllQuantity = false
+                    },
+                    label = {
+                        Text("Quantity (${selectedItem?.unit ?: "units"})")
+                    },
+                    modifier = Modifier.weight(1f),
+                    keyboardOptions = androidx.compose.foundation.text
+                        .KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal
+                        ),
+                    isError = showError && quantity.isBlank(),
+                    supportingText = {
+                        if (showError && quantity.isBlank())
+                            Text("Quantity is required")
+                    }
+                )
+                FilterChip(
+                    selected = useAllQuantity,
+                    onClick = {
+                        useAllQuantity = !useAllQuantity
+                        if (useAllQuantity) {
+                            quantity = selectedItem?.quantity?.toString().orEmpty()
+                        }
+                    },
+                    enabled = selectedItem != null,
+                    label = { Text("All") },
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
 
             // ── Reason tags ───────────────────────────────────────────────
             Text(
@@ -172,6 +214,63 @@ fun WasteLogScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
+            Button(
+                onClick = {
+                    viewModel.generateSmartWasteReason(
+                        pantryItem = selectedItem,
+                        quantityWasted = quantity
+                    )
+                },
+                enabled = selectedItem != null && !smartWasteReasonState.isLoading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
+                if (smartWasteReasonState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSecondary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Choosing reason...")
+                } else {
+                    Icon(
+                        Icons.Filled.AutoAwesome,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Smart Reason")
+                }
+            }
+
+            if (preventionTip.isNotBlank()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Prevention Tip",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = preventionTip,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 reasonTags.forEachIndexed { index, label ->
                     val key = reasonKeys[index]
