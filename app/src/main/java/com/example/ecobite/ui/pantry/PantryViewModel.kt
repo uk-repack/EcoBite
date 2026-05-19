@@ -152,6 +152,23 @@ class PantryViewModel @Inject constructor(
         }
     }
 
+    fun markRecipeCooked(usedItems: List<PantryItem>) {
+        if (usedItems.isEmpty()) {
+            _uiMessage.value = "No matching pantry items were found."
+            return
+        }
+
+        viewModelScope.launch {
+            usedItems.forEach { item ->
+                repository.deleteItem(item)
+                notificationScheduler.cancelNotification(item.id)
+            }
+            _uiMessage.value = "Cooked recipe: removed ${
+                usedItems.joinToString { it.name }
+            } from pantry"
+        }
+    }
+
     // ── Barcode lookup ────────────────────────────────────────────────────
 
     fun lookupBarcode(barcode: String) {

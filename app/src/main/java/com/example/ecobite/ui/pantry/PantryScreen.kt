@@ -105,9 +105,11 @@ fun PantryScreen(
                 }
                 item {
                     SmartRecipeCard(
+                        pantryItems = pantryItems,
                         isLoading = smartRecipeState.isLoading,
                         recipe = smartRecipeState.recipe,
-                        onGenerate = viewModel::generateSmartRecipe
+                        onGenerate = viewModel::generateSmartRecipe,
+                        onMarkCooked = viewModel::markRecipeCooked
                     )
                 }
                 items(
@@ -126,11 +128,17 @@ fun PantryScreen(
 
 @Composable
 fun SmartRecipeCard(
+    pantryItems: List<PantryItem>,
     isLoading: Boolean,
     recipe: SmartRecipeSuggestion?,
-    onGenerate: () -> Unit
+    onGenerate: () -> Unit,
+    onMarkCooked: (List<PantryItem>) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    val matchedUsedItems = remember(recipe, pantryItems) {
+        recipe?.let { matchRecipeUsedItems(it, pantryItems) }.orEmpty()
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -187,10 +195,50 @@ fun SmartRecipeCard(
                 SmartRecipeContent(
                     recipe = it,
                     isExpanded = isExpanded,
-                    onToggleExpanded = { isExpanded = !isExpanded }
+                    matchedUsedItems = matchedUsedItems,
+                    onToggleExpanded = { isExpanded = !isExpanded },
+                    onMarkCooked = { showConfirmDialog = true }
                 )
             }
         }
+    }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("Mark recipe cooked?") },
+            text = {
+                Text(
+                    text = if (matchedUsedItems.isEmpty()) {
+                        "No matching pantry items were found to remove."
+                    } else {
+                        "This will remove the full matched pantry items:\n\n${
+                            matchedUsedItems.joinToString("\n") {
+                                "- ${it.name} — ${it.quantity} ${it.unit}"
+                            }
+                        }"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (matchedUsedItems.isNotEmpty()) {
+                            onMarkCooked(matchedUsedItems)
+                        }
+                        showConfirmDialog = false
+                    },
+                    enabled = matchedUsedItems.isNotEmpty()
+                ) {
+                    Text("Remove Full Items")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -198,7 +246,9 @@ fun SmartRecipeCard(
 fun SmartRecipeContent(
     recipe: SmartRecipeSuggestion,
     isExpanded: Boolean,
-    onToggleExpanded: () -> Unit
+    matchedUsedItems: List<PantryItem>,
+    onToggleExpanded: () -> Unit,
+    onMarkCooked: () -> Unit
 ) {
     val hasStructuredContent = recipe.usesUp.isNotEmpty() ||
             recipe.pantryIngredients.isNotEmpty() ||
@@ -257,6 +307,29 @@ fun SmartRecipeContent(
         SmartRecipeSection("Uses Up", recipe.usesUp)
         SmartRecipeSection("Pantry Ingredients", recipe.pantryIngredients)
         SmartRecipeSection("Basic Extras", recipe.basicExtras)
+
+        if (matchedUsedItems.isNotEmpty()) {
+            Button(
+                onClick = onMarkCooked,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Mark Cooked")
+            }
+        }
+    }
+}
+
+fun matchRecipeUsedItems(
+    recipe: SmartRecipeSuggestion,
+    pantryItems: List<PantryItem>
+): List<PantryItem> {
+    val recipeText = (recipe.usesUp + recipe.pantryIngredients)
+        .joinToString(" ")
+        .lowercase()
+
+    return pantryItems.filter { item ->
+        val itemName = item.name.lowercase()
+        itemName.isNotBlank() && recipeText.contains(itemName)
     }
 }
 

@@ -8,6 +8,7 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import retrofit2.HttpException
 
 @Singleton
 class GeminiRepository @Inject constructor(
@@ -53,7 +54,7 @@ class GeminiRepository @Inject constructor(
             }
         } catch (exception: Exception) {
             SmartFillResult.Error(
-                exception.message ?: "Could not generate Smart Fill details."
+                exception.toGeminiErrorMessage("Could not generate Smart Fill details.")
             )
         }
     }
@@ -98,7 +99,7 @@ class GeminiRepository @Inject constructor(
             }
         } catch (exception: Exception) {
             SmartWasteReasonResult.Error(
-                exception.message ?: "Could not generate Smart Reason details."
+                exception.toGeminiErrorMessage("Could not generate Smart Reason details.")
             )
         }
     }
@@ -142,7 +143,7 @@ class GeminiRepository @Inject constructor(
             }
         } catch (exception: Exception) {
             SmartRecipeResult.Error(
-                exception.message ?: "Could not generate Smart Recipe."
+                exception.toGeminiErrorMessage("Could not generate Smart Recipe.")
             )
         }
     }
@@ -186,8 +187,31 @@ class GeminiRepository @Inject constructor(
             }
         } catch (exception: Exception) {
             GeminiResult.Error(
-                exception.message ?: "Could not generate Smart Pantry suggestions."
+                exception.toGeminiErrorMessage(
+                    "Could not generate Smart Pantry suggestions."
+                )
             )
+        }
+    }
+
+    private fun Exception.toGeminiErrorMessage(fallback: String): String {
+        return when {
+            this is HttpException && code() == 429 -> {
+                "Gemini rate limit reached. Please wait a bit and try again."
+            }
+            this is HttpException && code() == 401 -> {
+                "Gemini API key was rejected. Check GEMINI_API_KEY in local.properties."
+            }
+            this is HttpException && code() == 403 -> {
+                "Gemini access is blocked for this key or project."
+            }
+            this is HttpException -> {
+                "Gemini request failed with HTTP ${code()}."
+            }
+            message?.contains("timeout", ignoreCase = true) == true -> {
+                "Gemini took too long to respond. Please try again."
+            }
+            else -> message ?: fallback
         }
     }
 
