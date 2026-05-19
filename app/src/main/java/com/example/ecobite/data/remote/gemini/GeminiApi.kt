@@ -29,7 +29,7 @@ data class GeminiPart(
 
 data class GeminiGenerationConfig(
     val temperature: Float = 0.45f,
-    val maxOutputTokens: Int = 1200
+    val maxOutputTokens: Int = 1600
 )
 
 data class GeminiGenerateResponse(

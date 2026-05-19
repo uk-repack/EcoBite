@@ -19,6 +19,7 @@ import com.example.ecobite.data.remote.gemini.GeminiRepository
 
 import androidx.work.WorkManager
 import com.example.ecobite.worker.NotificationScheduler
+import java.util.concurrent.TimeUnit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -71,8 +72,16 @@ object AppModule {
     @Provides
     @Singleton
     fun provideGeminiApi(): GeminiApi {
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(120, TimeUnit.SECONDS)
+            .build()
+
         return retrofit2.Retrofit.Builder()
             .baseUrl("https://generativelanguage.googleapis.com/")
+            .client(client)
             .addConverterFactory(
                 retrofit2.converter.gson.GsonConverterFactory.create()
             )

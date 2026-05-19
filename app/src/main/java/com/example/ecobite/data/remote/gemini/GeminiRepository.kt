@@ -2,6 +2,7 @@ package com.example.ecobite.data.remote.gemini
 
 import com.example.ecobite.BuildConfig
 import com.example.ecobite.data.local.entities.PantryItem
+import com.google.gson.JsonParser
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -278,28 +279,18 @@ class GeminiRepository @Inject constructor(
             Create one simple Indian-home-friendly recipe using pantry items below.
             Prioritize items that expire soon. Do not require expensive or uncommon ingredients.
             Basic extras like salt, water, oil, spices, onion, garlic, chilli, lemon, or curd are allowed.
-            Include a complete usable recipe, not only a title.
-            Include 5 to 7 concrete cooking steps.
-            Keep each step short but specific.
-            Use exactly this format:
-
-            RECIPE_NAME: name
-            WASTE_SAVING_NOTE: short note
-            USES_UP:
-            - pantry item
-            - pantry item
-            PANTRY_INGREDIENTS:
-            - ingredient
-            - ingredient
-            BASIC_EXTRAS:
-            - extra
-            - extra
-            STEPS:
-            - step
-            - step
-            - step
-            - step
-            - step
+            Return only compact valid JSON. Do not use markdown.
+            Include exactly 5 concrete cooking steps.
+            Keep every string short and specific.
+            Use this shape:
+            {
+              "recipeName": "name",
+              "wasteSavingNote": "short note",
+              "steps": ["step 1", "step 2", "step 3", "step 4", "step 5"],
+              "usesUp": ["pantry item"],
+              "pantryIngredients": ["ingredient with quantity"],
+              "basicExtras": ["extra"]
+            }
 
             Pantry:
             $pantryLines
@@ -341,6 +332,8 @@ class GeminiRepository @Inject constructor(
     }
 
     private fun parseSmartRecipe(text: String): SmartRecipeSuggestion {
+        parseSmartRecipeJson(text)?.let { return it }
+
         val recipeName = extractSingleLineValue(
             text,
             listOf("RECIPE_NAME", "RECIPE NAME", "Recipe Name")
@@ -360,6 +353,47 @@ class GeminiRepository @Inject constructor(
             steps = extractRecipeSection(text, "STEPS"),
             rawText = text
         )
+    }
+
+    private fun parseSmartRecipeJson(text: String): SmartRecipeSuggestion? {
+        return try {
+            val jsonText = text
+                .removePrefix("```json")
+                .removePrefix("```")
+                .removeSuffix("```")
+                .trim()
+            val jsonObject = JsonParser().parse(jsonText).asJsonObject
+
+            SmartRecipeSuggestion(
+                recipeName = jsonObject.stringValue("recipeName")
+                    .ifBlank { "Smart Pantry Recipe" },
+                wasteSavingNote = jsonObject.stringValue("wasteSavingNote"),
+                usesUp = jsonObject.stringList("usesUp"),
+                pantryIngredients = jsonObject.stringList("pantryIngredients"),
+                basicExtras = jsonObject.stringList("basicExtras"),
+                steps = jsonObject.stringList("steps"),
+                rawText = text
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun com.google.gson.JsonObject.stringValue(name: String): String {
+        return get(name)?.takeIf { !it.isJsonNull }?.asString?.trim().orEmpty()
+    }
+
+    private fun com.google.gson.JsonObject.stringList(name: String): List<String> {
+        val element = get(name)?.takeIf { !it.isJsonNull } ?: return emptyList()
+        if (!element.isJsonArray) return emptyList()
+
+        return element.asJsonArray
+            .mapNotNull { item ->
+                item.takeIf { it.isJsonPrimitive }
+                    ?.asString
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+            }
     }
 
     private fun extractRecipeSection(text: String, heading: String): List<String> {

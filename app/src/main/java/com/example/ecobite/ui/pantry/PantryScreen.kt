@@ -253,10 +253,10 @@ fun SmartRecipeContent(
 
         if (!isExpanded) return@Column
 
+        SmartRecipeSection("Steps", recipe.steps)
         SmartRecipeSection("Uses Up", recipe.usesUp)
         SmartRecipeSection("Pantry Ingredients", recipe.pantryIngredients)
         SmartRecipeSection("Basic Extras", recipe.basicExtras)
-        SmartRecipeSection("Steps", recipe.steps)
     }
 }
 
