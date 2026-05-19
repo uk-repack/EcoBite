@@ -278,10 +278,13 @@ class GeminiRepository @Inject constructor(
             Create one simple Indian-home-friendly recipe using pantry items below.
             Prioritize items that expire soon. Do not require expensive or uncommon ingredients.
             Basic extras like salt, water, oil, spices, onion, garlic, chilli, lemon, or curd are allowed.
-            Keep each step short.
+            Include a complete usable recipe, not only a title.
+            Include 5 to 7 concrete cooking steps.
+            Keep each step short but specific.
             Use exactly this format:
 
             RECIPE_NAME: name
+            WASTE_SAVING_NOTE: short note
             USES_UP:
             - pantry item
             - pantry item
@@ -292,6 +295,7 @@ class GeminiRepository @Inject constructor(
             - extra
             - extra
             STEPS:
+            - step
             - step
             - step
             - step
@@ -337,11 +341,19 @@ class GeminiRepository @Inject constructor(
     }
 
     private fun parseSmartRecipe(text: String): SmartRecipeSuggestion {
-        val recipeName = extractValue(text, "RECIPE_NAME")
+        val recipeName = extractSingleLineValue(
+            text,
+            listOf("RECIPE_NAME", "RECIPE NAME", "Recipe Name")
+        )
             .ifBlank { "Smart Pantry Recipe" }
+        val wasteSavingNote = extractSingleLineValue(
+            text,
+            listOf("WASTE_SAVING_NOTE", "WASTE SAVING NOTE", "Waste Saving Note")
+        )
 
         return SmartRecipeSuggestion(
             recipeName = recipeName,
+            wasteSavingNote = wasteSavingNote,
             usesUp = extractRecipeSection(text, "USES_UP"),
             pantryIngredients = extractRecipeSection(text, "PANTRY_INGREDIENTS"),
             basicExtras = extractRecipeSection(text, "BASIC_EXTRAS"),
@@ -351,8 +363,87 @@ class GeminiRepository @Inject constructor(
     }
 
     private fun extractRecipeSection(text: String, heading: String): List<String> {
+        val headingAliases = mapOf(
+            "RECIPE_NAME" to listOf("RECIPE_NAME", "RECIPE NAME", "Recipe Name"),
+            "WASTE_SAVING_NOTE" to listOf(
+                "WASTE_SAVING_NOTE",
+                "WASTE SAVING NOTE",
+                "Waste Saving Note"
+            ),
+            "USES_UP" to listOf("USES_UP", "USES UP", "Uses Up"),
+            "PANTRY_INGREDIENTS" to listOf(
+                "PANTRY_INGREDIENTS",
+                "PANTRY INGREDIENTS",
+                "Pantry Ingredients"
+            ),
+            "BASIC_EXTRAS" to listOf(
+                "BASIC_EXTRAS",
+                "BASIC EXTRAS",
+                "Basic Extras"
+            ),
+            "STEPS" to listOf("STEPS", "Steps", "METHOD", "Method")
+        )
+
+        val aliases = headingAliases[heading].orEmpty()
+        val startMatch = aliases
+            .mapNotNull { alias -> findHeading(text, alias) }
+            .minByOrNull { it.first }
+        val start = startMatch?.first ?: return emptyList()
+        val headingLength = startMatch.second.length
+
+        val contentStart = start + headingLength
+        val nextHeadingStart = headingAliases
+            .filterKeys { it != heading }
+            .values
+            .flatten()
+            .mapNotNull { alias -> findHeading(text, alias, contentStart)?.first }
+            .minOrNull() ?: text.length
+
+        return text.substring(contentStart, nextHeadingStart)
+            .lineSequence()
+            .map { line ->
+                line.trim()
+                    .removePrefix("-")
+                    .removePrefix("*")
+                    .trim()
+            }
+            .filter { it.isNotBlank() }
+            .toList()
+    }
+
+    private fun findHeading(
+        text: String,
+        heading: String,
+        startIndex: Int = 0
+    ): Pair<Int, String>? {
+        val pattern = Regex(
+            pattern = "(?im)^\\s*(?:#+\\s*)?(?:\\*\\*)?${Regex.escape(heading)}(?:\\*\\*)?\\s*:",
+        )
+        val match = pattern.find(text, startIndex) ?: return null
+        return match.range.first to match.value
+    }
+
+    private fun extractSingleLineValue(text: String, labels: List<String>): String {
+        return labels.asSequence()
+            .mapNotNull { label -> findHeading(text, label) }
+            .minByOrNull { it.first }
+            ?.let { match ->
+                text.substring(match.first + match.second.length)
+                    .lineSequence()
+                    .firstOrNull()
+                    ?.trim()
+            }
+            .orEmpty()
+    }
+
+    private fun extractSingleLineValue(text: String, label: String): String {
+        return extractSingleLineValue(text, listOf(label))
+    }
+
+    private fun extractLegacyRecipeSection(text: String, heading: String): List<String> {
         val headings = listOf(
             "RECIPE_NAME",
+            "WASTE_SAVING_NOTE",
             "USES_UP",
             "PANTRY_INGREDIENTS",
             "BASIC_EXTRAS",
@@ -476,6 +567,7 @@ sealed interface SmartRecipeResult {
 
 data class SmartRecipeSuggestion(
     val recipeName: String,
+    val wasteSavingNote: String,
     val usesUp: List<String>,
     val pantryIngredients: List<String>,
     val basicExtras: List<String>,

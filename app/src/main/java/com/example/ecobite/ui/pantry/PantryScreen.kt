@@ -130,6 +130,8 @@ fun SmartRecipeCard(
     recipe: SmartRecipeSuggestion?,
     onGenerate: () -> Unit
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -182,7 +184,11 @@ fun SmartRecipeCard(
             }
 
             recipe?.let {
-                SmartRecipeContent(recipe = it)
+                SmartRecipeContent(
+                    recipe = it,
+                    isExpanded = isExpanded,
+                    onToggleExpanded = { isExpanded = !isExpanded }
+                )
             }
         }
     }
@@ -190,7 +196,9 @@ fun SmartRecipeCard(
 
 @Composable
 fun SmartRecipeContent(
-    recipe: SmartRecipeSuggestion
+    recipe: SmartRecipeSuggestion,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit
 ) {
     val hasStructuredContent = recipe.usesUp.isNotEmpty() ||
             recipe.pantryIngredients.isNotEmpty() ||
@@ -198,11 +206,19 @@ fun SmartRecipeContent(
             recipe.steps.isNotEmpty()
 
     if (!hasStructuredContent) {
-        Text(
-            text = recipe.rawText,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        TextButton(
+            onClick = onToggleExpanded,
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        ) {
+            Text(if (isExpanded) "Hide Recipe" else "View Recipe")
+        }
+        if (isExpanded) {
+            Text(
+                text = recipe.rawText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         return
     }
 
@@ -213,6 +229,30 @@ fun SmartRecipeContent(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (recipe.usesUp.isNotEmpty()) {
+            Text(
+                text = "Uses up: ${recipe.usesUp.joinToString()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (recipe.wasteSavingNote.isNotBlank()) {
+            Text(
+                text = recipe.wasteSavingNote,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        TextButton(
+            onClick = onToggleExpanded,
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        ) {
+            Text(if (isExpanded) "Hide Recipe" else "View Recipe")
+        }
+
+        if (!isExpanded) return@Column
+
         SmartRecipeSection("Uses Up", recipe.usesUp)
         SmartRecipeSection("Pantry Ingredients", recipe.pantryIngredients)
         SmartRecipeSection("Basic Extras", recipe.basicExtras)
